@@ -1,0 +1,28 @@
+# The Compilation Stage
+FROM node:alpine AS builder
+# The source files to run the code should be in folder source of you repo
+COPY src /app
+# Working directory inside you Docker is app
+WORKDIR /app
+# Install all packages
+RUN npm install
+
+# The runtime stage
+FROM alpine:latest
+# install only the nodejs runtime and tini to manage processes and clean up
+RUN apk add --no-cache nodejs tini \
+    && rm -rf /var/cache/apk/*
+# Copy the source from the builder stage
+COPY --from=builder /app /app
+# Working directory inside you Docker is app
+WORKDIR /app
+# Use the node user that comes with node.js for more restricted access
+USER node
+# Put other commands here that are necessary e.g:
+# EXPOSE ...
+# Make tini the entry point
+ENTRYPOINT ["/sbin/tini", "--"]
+# the command to actually launch your code, rename index.js to the name of your entry file
+CMD node index.js
+ 
+
