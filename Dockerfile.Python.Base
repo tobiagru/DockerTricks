@@ -1,0 +1,44 @@
+FROM python:3.8-alpine as build
+# install everything required to build python wheels for all dependencies
+RUN apk add --no-cache \
+            --upgrade \
+            --repository http://dl-cdn.alpinelinux.org/alpine/edge/main \
+       alpine-sdk \
+       gcc \
+       cython
+       # Add dev versions of any libs required to build wheels for your code
+# Copy the requirements file into the build container
+COPY src/requirements.txt /wheels/requirements.txt
+# We are creating the wheels only
+WORKDIR /wheels
+# Build wheels for all dependcies
+RUN pip install -U pip \
+   && pip wheel -r ./requirements.txt
+
+# Build container
+FROM python:3.8-alpine
+# Install everything to run your code end dependencies
+RUN apk add --no-cache \
+            --upgrade \
+            --repository http://dl-cdn.alpinelinux.org/alpine/edge/main \
+       tini \
+       #Add runtime versions of any libs required to run your depencies
+       && rm -rf /var/cache/apk/*
+COPY --from=build /wheels /wheels
+# Install the dependecies from the compiled wheels
+RUN pip install -U pip \
+       && pip install -r /wheels/requirements.txt \
+                      -f /wheels \
+       && rm -rf /wheels \
+       && rm -rf /root/.cache/pip/*
+# Get your actual source files
+COPY src /app
+# Working directory inside you Docker is app
+WORKDIR /app
+# Make sure /app is part of your pythonpath so that you source tree is properly resolved
+ENV PYTHONPATH "${PYTHONPATH}:/app"
+ENV PYTHONPATH "${PYTHONPATH}:/app/*"
+# Make tini the entry point
+ENTRYPOINT ["/sbin/tini", "--"]
+# the command to actually launch your code, rename main.py to the name of your entry file
+CMD python main.py
